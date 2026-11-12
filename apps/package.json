@@ -1,0 +1,15 @@
+{
+  "name": "localize-monorepo",
+  "private": true,
+  "packageManager": "npm@10.8.2",
+  "workspaces": [
+    "web/client/*",
+    "web/server/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev --filter=backend --filter=frontend"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4"
+  }
+}
