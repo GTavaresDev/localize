@@ -21,6 +21,12 @@ interface CotacaoDetalheProps {
   params: Promise<{ id: string }>;
 }
 
+export async function generateStaticParams() {
+  return cotacoesCadastradas.map((c) => ({
+    id: c.slug,
+  }));
+}
+
 export default async function CotacaoDetalhePage({ params }: CotacaoDetalheProps) {
   const { id } = await params;
 
