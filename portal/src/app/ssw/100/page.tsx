@@ -1,9 +1,5 @@
-"use client";
-
-import { useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { encomendas, StatusEncomenda, Encomenda } from "@/_data/encomendas";
+import { encomendas, StatusEncomenda } from "@/_data/encomendas";
 import { normalizarTexto, normalizarNumeros, bateDocumento } from "@/lib/search-utils";
 import {
   PackageIcon,
@@ -15,8 +11,10 @@ import {
   MapPinIcon,
   ArrowUpRightIcon,
 } from "@/components/icons";
-import { ArrowLeft, Filter } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
+
+export const instant = false;
 
 function getStatusConfig(status: StatusEncomenda) {
   switch (status) {
@@ -54,82 +52,82 @@ function getStatusConfig(status: StatusEncomenda) {
   }
 }
 
-function RastreamentoContent() {
-  const searchParams = useSearchParams();
+interface RastreamentoPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
 
-  // Query params suportados:
-  // - ?q=... (busca geral)
-  // - ?codigo=...
-  // - ?nf=...
-  // - ?cpf=...
-  // - ?cpf_remetente=...
-  // - ?cpf_destinatario=...
-  const q = searchParams.get("q");
-  const paramCodigo = searchParams.get("codigo");
-  const paramNf = searchParams.get("nf");
-  const paramCpf = searchParams.get("cpf");
-  const paramCpfRemetente = searchParams.get("cpf_remetente");
-  const paramCpfDestinatario = searchParams.get("cpf_destinatario");
+function getParam(param: string | string[] | undefined): string | undefined {
+  if (Array.isArray(param)) return param[0];
+  return param;
+}
+
+export default async function RastreamentoPage({ searchParams }: RastreamentoPageProps) {
+  const resolvedParams = await searchParams;
+
+  const q = getParam(resolvedParams.q);
+  const paramCodigo = getParam(resolvedParams.codigo);
+  const paramNf = getParam(resolvedParams.nf);
+  const paramCpf = getParam(resolvedParams.cpf);
+  const paramCpfRemetente = getParam(resolvedParams.cpf_remetente);
+  const paramCpfDestinatario = getParam(resolvedParams.cpf_destinatario);
 
   const temFiltroAtivo = Boolean(
     q || paramCodigo || paramNf || paramCpf || paramCpfRemetente || paramCpfDestinatario
   );
 
-  const encomendasFiltradas = useMemo(() => {
-    return encomendas.filter((item) => {
-      // 1. Busca por parâmetro específico de Código
-      if (paramCodigo) {
-        const codigoBuscado = normalizarTexto(paramCodigo);
-        if (!normalizarTexto(item.id).includes(codigoBuscado)) return false;
+  const encomendasFiltradas = encomendas.filter((item) => {
+    // 1. Busca por parâmetro específico de Código
+    if (paramCodigo) {
+      const codigoBuscado = normalizarTexto(paramCodigo);
+      if (!normalizarTexto(item.id).includes(codigoBuscado)) return false;
+    }
+
+    // 2. Busca por parâmetro específico de NF
+    if (paramNf) {
+      const nfBuscada = normalizarTexto(paramNf);
+      const nfLimpa = normalizarNumeros(paramNf);
+      const nfItemLimpa = normalizarNumeros(item.nf);
+      const match =
+        normalizarTexto(item.nf).includes(nfBuscada) ||
+        (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
+      if (!match) return false;
+    }
+
+    // 3. Busca por CPF geral (remetente ou destinatário)
+    if (paramCpf) {
+      const matchRem = bateDocumento(item.remetente.documento, paramCpf);
+      const matchDest = bateDocumento(item.destinatario.documento, paramCpf);
+      if (!matchRem && !matchDest) return false;
+    }
+
+    // 4. Busca por CPF específico do remetente
+    if (paramCpfRemetente) {
+      if (!bateDocumento(item.remetente.documento, paramCpfRemetente)) return false;
+    }
+
+    // 5. Busca por CPF específico do destinatário
+    if (paramCpfDestinatario) {
+      if (!bateDocumento(item.destinatario.documento, paramCpfDestinatario)) return false;
+    }
+
+    // 6. Busca unificada via ?q= (código, nf ou cpf de destinatário ou remetente)
+    if (q) {
+      const matchCodigo = normalizarTexto(item.id).includes(normalizarTexto(q));
+      const nfLimpa = normalizarNumeros(q);
+      const nfItemLimpa = normalizarNumeros(item.nf);
+      const matchNf =
+        normalizarTexto(item.nf).includes(normalizarTexto(q)) ||
+        (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
+      const matchRemCpf = bateDocumento(item.remetente.documento, q);
+      const matchDestCpf = bateDocumento(item.destinatario.documento, q);
+
+      if (!matchCodigo && !matchNf && !matchRemCpf && !matchDestCpf) {
+        return false;
       }
+    }
 
-      // 2. Busca por parâmetro específico de NF
-      if (paramNf) {
-        const nfBuscada = normalizarTexto(paramNf);
-        const nfLimpa = normalizarNumeros(paramNf);
-        const nfItemLimpa = normalizarNumeros(item.nf);
-        const match =
-          normalizarTexto(item.nf).includes(nfBuscada) ||
-          (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
-        if (!match) return false;
-      }
-
-      // 3. Busca por CPF geral (remetente ou destinatário)
-      if (paramCpf) {
-        const matchRem = bateDocumento(item.remetente.documento, paramCpf);
-        const matchDest = bateDocumento(item.destinatario.documento, paramCpf);
-        if (!matchRem && !matchDest) return false;
-      }
-
-      // 4. Busca por CPF específico do remetente
-      if (paramCpfRemetente) {
-        if (!bateDocumento(item.remetente.documento, paramCpfRemetente)) return false;
-      }
-
-      // 5. Busca por CPF específico do destinatário
-      if (paramCpfDestinatario) {
-        if (!bateDocumento(item.destinatario.documento, paramCpfDestinatario)) return false;
-      }
-
-      // 6. Busca unificada via ?q= (código, nf ou cpf de destinatário ou remetente)
-      if (q) {
-        const matchCodigo = normalizarTexto(item.id).includes(normalizarTexto(q));
-        const nfLimpa = normalizarNumeros(q);
-        const nfItemLimpa = normalizarNumeros(item.nf);
-        const matchNf =
-          normalizarTexto(item.nf).includes(normalizarTexto(q)) ||
-          (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
-        const matchRemCpf = bateDocumento(item.remetente.documento, q);
-        const matchDestCpf = bateDocumento(item.destinatario.documento, q);
-
-        if (!matchCodigo && !matchNf && !matchRemCpf && !matchDestCpf) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [q, paramCodigo, paramNf, paramCpf, paramCpfRemetente, paramCpfDestinatario]);
+    return true;
+  });
 
   const total = encomendasFiltradas.length;
   const emTransito = encomendasFiltradas.filter(
@@ -391,19 +389,5 @@ function RastreamentoContent() {
         </div>
       </main>
     </div>
-  );
-}
-
-export default function RastreamentoPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-white text-black p-6 flex items-center justify-center font-mono text-xs">
-          Carregando rastreamento...
-        </div>
-      }
-    >
-      <RastreamentoContent />
-    </Suspense>
   );
 }

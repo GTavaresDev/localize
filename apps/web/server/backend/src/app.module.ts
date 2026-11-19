@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { OrdersModule } from './domain/orders/orders.module';
+import { OrdersModule } from './domain/orders/_options/100/options-100.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }), AuthModule, OrdersModule],
