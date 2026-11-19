@@ -3,8 +3,9 @@
   "private": true,
   "packageManager": "npm@10.8.2",
   "workspaces": [
-    "web/client/*",
-    "web/server/*"
+    "frontend",
+    "server",
+    "portal"
   ],
   "scripts": {
     "dev": "turbo dev --filter=backend --filter=frontend"
