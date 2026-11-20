@@ -1,24 +1,31 @@
 import { redirect } from "next/navigation";
+import { encomendas } from "@/_data/encomendas";
+import {
+  filtrarEncomendas,
+  hasEncomendaSearchFilters,
+  parseEncomendaSearchParams,
+  searchParamsToQueryString,
+  type SearchParamsRecord,
+} from "@/lib/encomenda-search";
+
+export const instant = false;
 
 interface EncomendasPageProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<SearchParamsRecord>;
 }
 
 export default async function EncomendasRedirectPage({ searchParams }: EncomendasPageProps) {
   const resolvedParams = await searchParams;
-  const params = new URLSearchParams();
+  const filters = parseEncomendaSearchParams(resolvedParams);
 
-  for (const [key, value] of Object.entries(resolvedParams)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) {
-      for (const v of value) {
-        params.append(key, v);
-      }
-    } else {
-      params.set(key, value);
+  if (hasEncomendaSearchFilters(filters)) {
+    const matches = filtrarEncomendas(encomendas, filters);
+
+    if (matches.length === 1) {
+      redirect(`/encomendas/${matches[0].id}`);
     }
   }
 
-  const query = params.toString();
+  const query = searchParamsToQueryString(resolvedParams);
   redirect(query ? `/ssw/100?${query}` : "/ssw/100");
 }

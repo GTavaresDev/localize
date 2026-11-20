@@ -17,6 +17,7 @@ import {
   MailIcon,
 } from "@/components/icons";
 import { LogoutButton } from "@/components/logout-button";
+import { codigoNotaFiscal } from "@/lib/search-utils";
 
 interface PageProps {
   params: Promise<{
@@ -141,7 +142,7 @@ export default async function EncomendaDetalhesPage({ params }: PageProps) {
               <div className="flex items-center gap-3 text-xs text-[#404040] mt-2 font-medium">
                 <span className="inline-flex items-center gap-1.5">
                   <FileTextIcon className="w-3.5 h-3.5 text-[#404040]" />
-                  Nota Fiscal: <strong className="text-black font-mono font-bold">{encomenda.nf}</strong>
+                  Nota Fiscal: <strong className="text-black font-mono font-bold">{codigoNotaFiscal(encomenda.nf)}</strong>
                 </span>
               </div>
             </div>

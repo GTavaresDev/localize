@@ -1,6 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { encomendas } from "@/_data/encomendas";
-import { normalizarTexto, normalizarNumeros, bateDocumento } from "@/lib/search-utils";
+import {
+  filtrarEncomendas,
+  hasEncomendaSearchFilters,
+  parseEncomendaSearchParams,
+  type SearchParamsRecord,
+} from "@/lib/encomenda-search";
 import { BoxIcon, TruckIcon, CheckCircleIcon } from "@/components/icons";
 import { ArrowLeft } from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
@@ -9,81 +15,22 @@ import { EncomendaListClient } from "./encomenda-list-client";
 export const instant = false;
 
 interface RastreamentoPageProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}
-
-function getParam(param: string | string[] | undefined): string | undefined {
-  if (Array.isArray(param)) return param[0];
-  return param;
+  searchParams: Promise<SearchParamsRecord>;
 }
 
 export default async function RastreamentoPage({ searchParams }: RastreamentoPageProps) {
   const resolvedParams = await searchParams;
+  const filters = parseEncomendaSearchParams(resolvedParams);
+  const temFiltroAtivo = hasEncomendaSearchFilters(filters);
 
-  const q = getParam(resolvedParams.q);
-  const paramCodigo = getParam(resolvedParams.codigo);
-  const paramNf = getParam(resolvedParams.nf);
-  const paramCpf = getParam(resolvedParams.cpf);
-  const paramCpfRemetente = getParam(resolvedParams.cpf_remetente);
-  const paramCpfDestinatario = getParam(resolvedParams.cpf_destinatario);
+  const encomendasFiltradas = filtrarEncomendas(encomendas, filters);
 
-  const temFiltroAtivo = Boolean(
-    q || paramCodigo || paramNf || paramCpf || paramCpfRemetente || paramCpfDestinatario
-  );
+  if (temFiltroAtivo && encomendasFiltradas.length === 1) {
+    redirect(`/encomendas/${encomendasFiltradas[0].id}`);
+  }
 
-  const encomendasFiltradas = encomendas.filter((item) => {
-    // 1. Busca por parâmetro específico de Código
-    if (paramCodigo) {
-      const codigoBuscado = normalizarTexto(paramCodigo);
-      if (!normalizarTexto(item.id).includes(codigoBuscado)) return false;
-    }
-
-    // 2. Busca por parâmetro específico de NF
-    if (paramNf) {
-      const nfBuscada = normalizarTexto(paramNf);
-      const nfLimpa = normalizarNumeros(paramNf);
-      const nfItemLimpa = normalizarNumeros(item.nf);
-      const match =
-        normalizarTexto(item.nf).includes(nfBuscada) ||
-        (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
-      if (!match) return false;
-    }
-
-    // 3. Busca por CPF geral (remetente ou destinatário)
-    if (paramCpf) {
-      const matchRem = bateDocumento(item.remetente.documento, paramCpf);
-      const matchDest = bateDocumento(item.destinatario.documento, paramCpf);
-      if (!matchRem && !matchDest) return false;
-    }
-
-    // 4. Busca por CPF específico do remetente
-    if (paramCpfRemetente) {
-      if (!bateDocumento(item.remetente.documento, paramCpfRemetente)) return false;
-    }
-
-    // 5. Busca por CPF específico do destinatário
-    if (paramCpfDestinatario) {
-      if (!bateDocumento(item.destinatario.documento, paramCpfDestinatario)) return false;
-    }
-
-    // 6. Busca unificada via ?q= (código, nf ou cpf de destinatário ou remetente)
-    if (q) {
-      const matchCodigo = normalizarTexto(item.id).includes(normalizarTexto(q));
-      const nfLimpa = normalizarNumeros(q);
-      const nfItemLimpa = normalizarNumeros(item.nf);
-      const matchNf =
-        normalizarTexto(item.nf).includes(normalizarTexto(q)) ||
-        (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
-      const matchRemCpf = bateDocumento(item.remetente.documento, q);
-      const matchDestCpf = bateDocumento(item.destinatario.documento, q);
-
-      if (!matchCodigo && !matchNf && !matchRemCpf && !matchDestCpf) {
-        return false;
-      }
-    }
-
-    return true;
-  });
+  const { q, codigo: paramCodigo, nf: paramNf, cpf: paramCpf, cpfRemetente: paramCpfRemetente, cpfDestinatario: paramCpfDestinatario } =
+    filters;
 
   const total = encomendasFiltradas.length;
   const emTransito = encomendasFiltradas.filter(
@@ -186,7 +133,11 @@ export default async function RastreamentoPage({ searchParams }: RastreamentoPag
                 Painel de <span className="text-[#000080]">Encomendas</span>
               </h1>
               <p className="text-sm text-[#404040] mt-1.5 max-w-lg">
-                Filtre por código de rastreamento, número de NF ou CPF do remetente e destinatário.
+                Consulte por URL com{" "}
+                <span className="font-mono text-[11px]">?destinatario=</span>,{" "}
+                <span className="font-mono text-[11px]">?remetente=</span>,{" "}
+                <span className="font-mono text-[11px]">?nf=</span> ou busca unificada{" "}
+                <span className="font-mono text-[11px]">?q=</span>. Uma única correspondência abre o detalhe da encomenda.
               </p>
             </div>
 

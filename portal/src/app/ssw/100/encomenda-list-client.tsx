@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Encomenda, StatusEncomenda } from "@/_data/encomendas";
-import { normalizarTexto, normalizarNumeros, bateDocumento } from "@/lib/search-utils";
+import { bateDocumento, bateNotaFiscal, codigoNotaFiscal, normalizarTexto } from "@/lib/search-utils";
 import {
   PackageIcon,
   TruckIcon,
@@ -84,12 +84,7 @@ export function EncomendaListClient({
       const termo = normalizarTexto(buscaLocal);
       const matchCodigo = normalizarTexto(item.id).includes(termo);
 
-      // Busca por NF (tanto por texto quanto por dígitos limpos)
-      const nfLimpa = normalizarNumeros(buscaLocal);
-      const nfItemLimpa = normalizarNumeros(item.nf);
-      const matchNf =
-        normalizarTexto(item.nf).includes(termo) ||
-        (nfLimpa.length >= 2 && nfItemLimpa.includes(nfLimpa));
+      const matchNf = bateNotaFiscal(item.nf, buscaLocal);
 
       const matchRemCpf = bateDocumento(item.remetente.documento, buscaLocal);
       const matchDestCpf = bateDocumento(item.destinatario.documento, buscaLocal);
@@ -155,7 +150,7 @@ export function EncomendaListClient({
             type="text"
             value={buscaLocal}
             onChange={(e) => setBuscaLocal(e.target.value)}
-            placeholder="Buscar por NF, código de rastreio, CPF..."
+            placeholder="Buscar por código NF (ex: 0019283), rastreio, CPF..."
             className="w-full h-8 px-3 pr-8 win95-sunken bg-white text-xs text-black outline-none focus:border-[#000080]"
           />
           <Search className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-[#808080]" />
@@ -219,7 +214,7 @@ export function EncomendaListClient({
                           </span>
                         </div>
                         <span className="font-mono text-[11px] text-[#404040] block mt-0.5">
-                          NF: <strong className="text-black">{item.nf}</strong>
+                          NF: <strong className="text-black">{codigoNotaFiscal(item.nf)}</strong>
                         </span>
                       </div>
 
