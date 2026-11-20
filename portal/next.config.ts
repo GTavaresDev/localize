@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
+  async rewrites() {
+    return [
+      {
+        source: "/encomendas",
+        destination: "/ssw/100",
+      },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {
