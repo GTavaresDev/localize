@@ -1,5 +1,11 @@
 import type { Encomenda } from "@/_data/encomendas";
-import { bateDocumento, bateNotaFiscal, normalizarTermoNotaFiscal, normalizarTexto } from "@/lib/search-utils";
+import {
+  bateDocumento,
+  bateNotaFiscal,
+  codigoNotaFiscal,
+  normalizarTermoNotaFiscal,
+  normalizarTexto,
+} from "@/lib/search-utils";
 
 export type SearchParamsRecord = Record<string, string | string[] | undefined>;
 
@@ -47,6 +53,52 @@ export function hasEncomendaSearchFilters(filters: EncomendaSearchFilters): bool
       filters.cpfRemetente ||
       filters.cpfDestinatario
   );
+}
+
+export function hasCpfListagemFilters(filters: EncomendaSearchFilters): boolean {
+  return Boolean(filters.cpf || filters.cpfRemetente || filters.cpfDestinatario);
+}
+
+export function filtrarEncomendasPorCpf(
+  items: Encomenda[],
+  filters: EncomendaSearchFilters
+): Encomenda[] {
+  return filtrarEncomendas(items, {
+    cpf: filters.cpf,
+    cpfRemetente: filters.cpfRemetente,
+    cpfDestinatario: filters.cpfDestinatario,
+  });
+}
+
+export type Ssw100PathChave =
+  | { tipo: "codigo"; valor: string }
+  | { tipo: "nf"; valor: string };
+
+export function parseSsw100PathChave(chave: string): Ssw100PathChave | null {
+  const trimmed = chave.trim();
+  if (!trimmed) return null;
+
+  if (/^nf/i.test(trimmed)) {
+    const codigoNf = normalizarTermoNotaFiscal(trimmed);
+    if (!codigoNf) return null;
+    return { tipo: "nf", valor: codigoNf };
+  }
+
+  return { tipo: "codigo", valor: trimmed };
+}
+
+export function buscarEncomendaPorChave(
+  items: Encomenda[],
+  chave: string
+): Encomenda | undefined {
+  const parsed = parseSsw100PathChave(chave);
+  if (!parsed) return undefined;
+
+  if (parsed.tipo === "codigo") {
+    return items.find((item) => item.id.toLowerCase() === parsed.valor.toLowerCase());
+  }
+
+  return items.find((item) => codigoNotaFiscal(item.nf) === parsed.valor);
 }
 
 export function filtrarEncomendas(items: Encomenda[], filters: EncomendaSearchFilters): Encomenda[] {

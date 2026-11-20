@@ -201,7 +201,7 @@ export function EncomendaListClient({
               return (
                 <Link
                   key={item.id}
-                  href={`/encomendas/${item.id}`}
+                  href={`/ssw/100/${item.id}`}
                   className="group relative flex flex-col justify-between win95-raised bg-[#C0C0C0] p-4 hover:bg-[#D4D0C8] active:translate-y-px"
                 >
                   {/* Top: Tracking ID + Badge */}

@@ -74,7 +74,7 @@ export function parseTrackingHtml(html: string): TrackingItem[] {
   const source = html.replace(/<!--[\s\S]*?-->/g, '');
 
   // Quebra o HTML em blocos, um por card, a partir de cada href de remessa
-  const cardStarts = [...source.matchAll(/href="\/encomendas\/([^"]+)"/g)];
+  const cardStarts = [...source.matchAll(/href="\/ssw\/100\/([^"]+)"/g)];
 
   const items: TrackingItem[] = [];
 

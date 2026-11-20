@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { encomendas } from "@/_data/encomendas";
 import {
-  filtrarEncomendas,
-  hasEncomendaSearchFilters,
+  filtrarEncomendasPorCpf,
+  hasCpfListagemFilters,
   parseEncomendaSearchParams,
   type SearchParamsRecord,
 } from "@/lib/encomenda-search";
@@ -21,15 +20,13 @@ interface RastreamentoPageProps {
 export default async function RastreamentoPage({ searchParams }: RastreamentoPageProps) {
   const resolvedParams = await searchParams;
   const filters = parseEncomendaSearchParams(resolvedParams);
-  const temFiltroAtivo = hasEncomendaSearchFilters(filters);
+  const temFiltroAtivo = hasCpfListagemFilters(filters);
 
-  const encomendasFiltradas = filtrarEncomendas(encomendas, filters);
+  const encomendasFiltradas = temFiltroAtivo
+    ? filtrarEncomendasPorCpf(encomendas, filters)
+    : encomendas;
 
-  if (temFiltroAtivo && encomendasFiltradas.length === 1) {
-    redirect(`/encomendas/${encomendasFiltradas[0].id}`);
-  }
-
-  const { q, codigo: paramCodigo, nf: paramNf, cpf: paramCpf, cpfRemetente: paramCpfRemetente, cpfDestinatario: paramCpfDestinatario } =
+  const { cpf: paramCpf, cpfRemetente: paramCpfRemetente, cpfDestinatario: paramCpfDestinatario } =
     filters;
 
   const total = encomendasFiltradas.length;
@@ -109,12 +106,9 @@ export default async function RastreamentoPage({ searchParams }: RastreamentoPag
               <div className="flex items-center gap-2 text-black flex-wrap">
                 <span className="font-bold text-[#000080]">Filtro ativo:</span>
                 <span className="font-mono bg-white px-2 py-0.5 win95-sunken">
-                  {q && `q="${q}" `}
-                  {paramCodigo && `codigo="${paramCodigo}" `}
-                  {paramNf && `nf="${paramNf}" `}
                   {paramCpf && `cpf="${paramCpf}" `}
-                  {paramCpfRemetente && `cpf_remetente="${paramCpfRemetente}" `}
-                  {paramCpfDestinatario && `cpf_destinatario="${paramCpfDestinatario}" `}
+                  {paramCpfRemetente && `remetente="${paramCpfRemetente}" `}
+                  {paramCpfDestinatario && `destinatario="${paramCpfDestinatario}" `}
                 </span>
               </div>
               <Link
@@ -133,11 +127,11 @@ export default async function RastreamentoPage({ searchParams }: RastreamentoPag
                 Painel de <span className="text-[#000080]">Encomendas</span>
               </h1>
               <p className="text-sm text-[#404040] mt-1.5 max-w-lg">
-                Consulte por URL com{" "}
-                <span className="font-mono text-[11px]">?destinatario=</span>,{" "}
-                <span className="font-mono text-[11px]">?remetente=</span>,{" "}
-                <span className="font-mono text-[11px]">?nf=</span> ou busca unificada{" "}
-                <span className="font-mono text-[11px]">?q=</span>. Uma única correspondência abre o detalhe da encomenda.
+                Detalhe por rota{" "}
+                <span className="font-mono text-[11px]">/ssw/100/BR…</span> ou{" "}
+                <span className="font-mono text-[11px]">/ssw/100/nf…</span>. Listagem por CPF:{" "}
+                <span className="font-mono text-[11px]">?destinatario=</span> ou{" "}
+                <span className="font-mono text-[11px]">?remetente=</span>.
               </p>
             </div>
 
