@@ -10,7 +10,12 @@ import {
   type ExternalPagePort,
 } from '../../../../../shared/ports/external-page.port';
 import { Get100Option } from '../get-option-100.gateway';
-import { parseTrackingHtml, TrackingItem } from '../parser/tracking-parser';
+import {
+  filterTrackingItemsByChave,
+  parseTrackingDetailHtml,
+  parseTrackingHtml,
+  TrackingItem,
+} from '../parser/tracking-parser';
 
 @Injectable()
 export class GetTrackingByIdUseCase {
@@ -33,6 +38,18 @@ export class GetTrackingByIdUseCase {
   ): Promise<TrackingItem[]> {
     const session = await this.resolveSession(credentials, cookies);
     const page = await this.externalPage.fetchPage(session, code);
-    return parseTrackingHtml(page);
+    const chave = String(code);
+    const listItems = parseTrackingHtml(page);
+    const filtered = filterTrackingItemsByChave(listItems, chave);
+
+    if (filtered.length > 0) {
+      return filtered;
+    }
+
+    if (listItems.length === 0) {
+      return parseTrackingDetailHtml(page);
+    }
+
+    return [];
   }
 }

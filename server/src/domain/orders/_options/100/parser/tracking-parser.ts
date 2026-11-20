@@ -138,3 +138,112 @@ export function parseTrackingHtml(html: string): TrackingItem[] {
 
   return items;
 }
+
+function normalizarTermoNotaFiscal(termo: string): string {
+  return termo.trim().replace(/^nf[-\s:]*/i, '').replace(/\D/g, '');
+}
+
+export function filterTrackingItemsByChave(
+  items: TrackingItem[],
+  chave: string,
+): TrackingItem[] {
+  const trimmed = chave.trim();
+  if (!trimmed) return items;
+
+  if (/^nf/i.test(trimmed)) {
+    const nfBuscada = normalizarTermoNotaFiscal(trimmed);
+    return items.filter((item) => {
+      const nfItem = normalizarTermoNotaFiscal(item.invoice ?? '');
+      return nfItem === nfBuscada;
+    });
+  }
+
+  const codigo = trimmed.toLowerCase();
+  return items.filter((item) => item.trackingCode.toLowerCase() === codigo);
+}
+
+/**
+ * Parse da página de detalhe /ssw/100/:chave (um único pedido).
+ */
+export function parseTrackingDetailHtml(html: string): TrackingItem[] {
+  if (!html) return [];
+
+  const source = html.replace(/<!--[\s\S]*?-->/g, '');
+
+  const trackingCode = captureFirst(
+    source,
+    /<h1[^>]*class="[^"]*text-2xl[^"]*font-mono[^"]*"[^>]*>([\s\S]*?)<\/h1\s*>/,
+  );
+  if (!trackingCode) return [];
+
+  const invoiceDigits = captureFirst(
+    source,
+    /Nota Fiscal:\s*<\/span\s*>\s*<strong[^>]*class="[^"]*font-mono[^"]*"[^>]*>([\s\S]*?)<\/strong\s*>/,
+  );
+  const invoice = invoiceDigits ? `NF: ${invoiceDigits}` : null;
+
+  const status = captureFirst(
+    source,
+    /<span[^>]*class="[^"]*w-2[^"]*h-2[^"]*"[^>]*><\/span\s*>\s*<span\s*>([\s\S]*?)<\/span\s*>/,
+  );
+
+  const estimatedDelivery = captureFirst(
+    source,
+    /Previsão:\s*<\/span\s*>\s*<span[^>]*class="[^"]*font-mono[^"]*font-bold[^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
+  );
+
+  const remetenteStart = source.indexOf('>Remetente<');
+  const destinatarioStart = source.indexOf('>Destinatário<');
+  const timelineStart = source.indexOf('Linha do Tempo');
+
+  const senderSection =
+    remetenteStart >= 0
+      ? source.slice(
+          remetenteStart,
+          destinatarioStart > remetenteStart ? destinatarioStart : undefined,
+        )
+      : '';
+  const recipientSection =
+    destinatarioStart >= 0
+      ? source.slice(
+          destinatarioStart,
+          timelineStart > destinatarioStart ? timelineStart : undefined,
+        )
+      : '';
+
+  const sender = parseDetailParty(senderSection);
+  const recipient = parseDetailParty(recipientSection);
+
+  return [
+    {
+      trackingCode,
+      invoice,
+      status,
+      sender,
+      recipient,
+      estimatedDelivery,
+    },
+  ];
+}
+
+function parseDetailParty(section: string): PartyInfo {
+  const name = captureFirst(
+    section,
+    /<p[^>]*class="[^"]*font-bold[^"]*text-sm[^"]*"[^>]*>([\s\S]*?)<\/p\s*>/,
+  );
+
+  const document = captureFirst(
+    section,
+    /<span[^>]*class="[^"]*text-\[10px\][^"]*font-mono[^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
+  );
+
+  const locationRaw = captureFirst(
+    section,
+    /<p[^>]*class="[^"]*text-xs[^"]*text-\[#404040\][^"]*mt-0\.5[^"]*"[^>]*>([\s\S]*?)<\/p\s*>/,
+  );
+  const location = locationRaw
+    ? locationRaw.replace(/\s*-\s*/g, ', ').trim()
+    : null;
+
+  return { name, document, location };
+}

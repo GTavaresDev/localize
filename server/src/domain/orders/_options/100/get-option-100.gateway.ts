@@ -18,7 +18,7 @@ export class Get100Option implements ExternalPagePort {
         : '';
 
     const url = code
-      ? `${PORTAL_BASE_URL}/ssw/100?q=${encodeURIComponent(code)}`
+      ? `${PORTAL_BASE_URL}/ssw/100/${encodeURIComponent(String(code))}`
       : `${PORTAL_BASE_URL}/ssw/100`;
 
     const res = await fetch(url, {
