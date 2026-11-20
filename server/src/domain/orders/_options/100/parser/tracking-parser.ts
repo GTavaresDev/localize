@@ -1,3 +1,5 @@
+// src/domain/orders/parser/tracking-parser.ts
+
 export interface PartyInfo {
   name: string | null;
   document: string | null;
@@ -13,97 +15,126 @@ export interface TrackingItem {
   estimatedDelivery: string | null;
 }
 
-function cleanText(text?: string | null): string | null {
-  if (!text) return null;
-  const cleaned = text
-    .replace(/<!--[\s\S]*?-->/g, '')
+function decodeEntities(text: string): string {
+  return text
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;/g, "'");
+}
+
+function cleanText(text?: string | null): string | null {
+  if (!text) return null;
+  const cleaned = decodeEntities(text.replace(/<[^>]+>/g, ''))
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned.length > 0 ? cleaned : null;
 }
 
+// Conteúdo do primeiro elemento com o padrão informado
+function captureFirst(source: string, pattern: RegExp): string | null {
+  const match = source.match(pattern);
+  return match ? cleanText(match[1]) : null;
+}
+
+function parseParty(section: string): PartyInfo {
+  // Nome: primeiro <p> em negrito dentro da seção
+  const name = captureFirst(
+    section,
+    /<p[^>]*class="[^"]*font-bold[^"]*"[^>]*>([\s\S]*?)<\/p\s*>/,
+  );
+
+  // Documento: <p> que começa com "Doc:" ou "CPF/Doc:"
+  const docBlock = captureFirst(
+    section,
+    /<p[^>]*class="[^"]*font-mono[^"]*"[^>]*>\s*((?:CPF\/Doc|Doc):[\s\S]*?)<\/p\s*>/,
+  );
+  const document = docBlock
+    ? docBlock.replace(/^(?:CPF\/Doc|Doc):\s*/, '')
+    : null;
+
+  // Localização: <span> de 11px com cidade e UF
+  const location = captureFirst(
+    section,
+    /<span[^>]*class="[^"]*text-\[11px\][^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
+  );
+
+  return { name, document, location };
+}
+
 /**
- * Faz o parse do HTML da opção 100 de rastreamento de encomendas,
- * extraindo o código de rastreio, NF, status, remetente, destinatário e previsão de entrega.
+ * Faz o parse da página /ssw/100 já renderizada pelo servidor.
+ * Retorna uma lista vazia se o HTML não contiver cards.
  */
-export function parseTrackingHtml(htmlContent: string): TrackingItem[] {
-  if (!htmlContent) return [];
+export function parseTrackingHtml(html: string): TrackingItem[] {
+  if (!html) return [];
 
-  const cardRegex = /<a\s+[^>]*href="\/encomendas\/([^"]+)"[\s\S]*?<\/a\s*>/g;
-  const matches = [...htmlContent.matchAll(cardRegex)];
+  // Remove comentários do React (<!-- -->) que quebram os padrões de texto
+  const source = html.replace(/<!--[\s\S]*?-->/g, '');
 
-  return matches.map((match) => {
-    const trackingCode = match[1];
-    const block = match[0];
+  // Quebra o HTML em blocos, um por card, a partir de cada href de remessa
+  const cardStarts = [...source.matchAll(/href="\/encomendas\/([^"]+)"/g)];
 
-    // Nota Fiscal
-    const invoiceMatch = block.match(/NF-[0-9A-Za-z]+/);
-    const invoice = invoiceMatch ? invoiceMatch[0] : null;
+  const items: TrackingItem[] = [];
 
-    // Status (Em Trânsito, Entregue, Pendente, Cancelado, Saiu para Entrega, etc.)
-    const statusMatch = block.match(
-      /<span\s+class="w-1\.5\s+h-1\.5[^"]*"><\/span\s*>\s*<span>([^<]+)<\/span\s*>/,
+  cardStarts.forEach((start, index) => {
+    const trackingCode = start[1];
+    const blockStart = start.index ?? 0;
+    const blockEnd =
+      index + 1 < cardStarts.length
+        ? (cardStarts[index + 1].index ?? source.length)
+        : source.length;
+
+    // Recorta a partir do <a> que contém o href até o próximo card
+    const aOpen = source.lastIndexOf('<a', blockStart);
+    const block = source.slice(aOpen >= 0 ? aOpen : blockStart, blockEnd);
+
+    const invoice = captureFirst(
+      block,
+      /<span[^>]*class="[^"]*font-mono[^"]*text-\[11px\][^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
     );
-    const status = statusMatch ? cleanText(statusMatch[1]) : null;
 
-    // Origem (Remetente)
-    const originSectionMatch = block.match(
-      /Origem \(Remetente\)[\s\S]*?(?=Destino \(Destinatário\)|$)/,
+    // Status: texto do <span> logo após o marcador colorido
+    const status = captureFirst(
+      block,
+      /<span[^>]*class="[^"]*w-1\.5[^"]*h-1\.5[^"]*"[^>]*><\/span\s*>\s*<span\s*>([\s\S]*?)<\/span\s*>/,
     );
-    const originSection = originSectionMatch ? originSectionMatch[0] : '';
-    const senderName = originSection.match(
-      /<p\s+class="[^"]*font-bold[^"]*">([\s\S]*?)<\/p\s*>/,
-    )?.[1];
-    const senderDoc = originSection.match(
-      /Doc:\s*(?:<!--[\s\S]*?-->)?\s*([0-9./-]+)/,
-    )?.[1];
-    const senderLocation = originSection.match(
-      /<span\s+class="text-\[11px\][^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
-    )?.[1];
 
-    // Destino (Destinatário)
-    const destSectionMatch = block.match(
-      /Destino \(Destinatário\)[\s\S]*?(?=<div\s+class="mt-3\s+pt-2|$)/,
+    // Seções do remetente e destinatário, delimitadas pelos rótulos
+    const senderStart = block.indexOf('Origem (Remetente)');
+    const recipientStart = block.indexOf('Destino (Destinatário)');
+    const previsaoStart = block.indexOf('Previsão:');
+
+    const senderSection =
+      senderStart >= 0
+        ? block.slice(
+            senderStart,
+            recipientStart > senderStart ? recipientStart : undefined,
+          )
+        : '';
+    const recipientSection =
+      recipientStart >= 0
+        ? block.slice(
+            recipientStart,
+            previsaoStart > recipientStart ? previsaoStart : undefined,
+          )
+        : '';
+
+    const estimatedDelivery = captureFirst(
+      block,
+      /Previsão:\s*<\/span\s*>\s*<span[^>]*class="[^"]*font-mono[^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
     );
-    const destSection = destSectionMatch ? destSectionMatch[0] : '';
-    const recipientName = destSection.match(
-      /<p\s+class="[^"]*font-bold[^"]*">([\s\S]*?)<\/p\s*>/,
-    )?.[1];
-    const recipientDoc = destSection.match(
-      /(?:CPF\/Doc|Doc):\s*(?:<!--[\s\S]*?-->)?\s*([0-9./-]+)/,
-    )?.[1];
-    const recipientLocation = destSection.match(
-      /<span\s+class="text-\[11px\][^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
-    )?.[1];
 
-    // Previsão de Entrega
-    const deliveryMatch = block.match(
-      /Previsão:\s*<\/span\s*>[\s\S]*?<span\s+class="[^"]*font-mono[^"]*"[^>]*>([\s\S]*?)<\/span\s*>/,
-    );
-    const estimatedDelivery = deliveryMatch
-      ? cleanText(deliveryMatch[1])
-      : null;
-
-    return {
+    items.push({
       trackingCode,
       invoice,
       status,
-      sender: {
-        name: cleanText(senderName),
-        document: cleanText(senderDoc),
-        location: cleanText(senderLocation),
-      },
-      recipient: {
-        name: cleanText(recipientName),
-        document: cleanText(recipientDoc),
-        location: cleanText(recipientLocation),
-      },
+      sender: parseParty(senderSection),
+      recipient: parseParty(recipientSection),
       estimatedDelivery,
-    };
+    });
   });
+
+  return items;
 }
